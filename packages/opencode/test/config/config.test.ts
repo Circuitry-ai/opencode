@@ -69,11 +69,12 @@ function remoteConfigClient(input: {
   wellKnown: unknown
   remote?: unknown
   remoteHtml?: string
-  seen: { wellKnown?: string; remote?: string; authorization?: string }
+  seen: { wellKnown?: string; wellKnownAuthorization?: string; remote?: string; authorization?: string }
 }) {
   return HttpClient.make((request) => {
     if (request.url.includes(".well-known/opencode")) {
       input.seen.wellKnown = request.url
+      input.seen.wellKnownAuthorization = request.headers.authorization
       return Effect.succeed(json(request, input.wellKnown))
     }
     if (request.url.includes("config.example.com") && (input.remote !== undefined || input.remoteHtml !== undefined)) {
@@ -219,7 +220,7 @@ const wellKnown = (input: {
   remoteHtml?: string
   wellKnown?: unknown
 }) => {
-  const seen: { wellKnown?: string; remote?: string; authorization?: string } = {}
+  const seen: { wellKnown?: string; wellKnownAuthorization?: string; remote?: string; authorization?: string } = {}
   const client = remoteConfigClient({
     seen,
     wellKnown: input.wellKnown ?? {
@@ -1682,6 +1683,43 @@ remoteProjectOverride.it.instance(
     git: true,
     config: { mcp: { jira: { type: "remote", url: "https://jira.example.com/mcp", enabled: true } } },
   },
+)
+
+const globalPrecedenceWellKnown = wellKnown({
+  config: {
+    model: "remote/model",
+    shell: "remote-shell",
+  },
+})
+
+globalPrecedenceWellKnown.it.instance(
+  "remote well-known config overrides user global config",
+  () =>
+    withGlobalConfig({ config: { model: "user/model" } }, () =>
+      Effect.gen(function* () {
+        const config = yield* Config.use.get()
+        expect(globalPrecedenceWellKnown.seen.wellKnown).toBe("https://example.com/.well-known/opencode")
+        expect(config.model).toBe("remote/model")
+        expect(config.shell).toBe("remote-shell")
+      }),
+    ),
+)
+
+globalPrecedenceWellKnown.it.instance("remote well-known config leaves user global fields it does not set", () =>
+  withGlobalConfig({ config: { model: "user/model", small_model: "user/small" } }, () =>
+    Effect.gen(function* () {
+      const config = yield* Config.use.get()
+      expect(config.model).toBe("remote/model")
+      expect(config.small_model).toBe("user/small")
+    }),
+  ),
+)
+
+globalPrecedenceWellKnown.it.instance("well-known fetch sends the stored credential as bearer token", () =>
+  Effect.gen(function* () {
+    yield* Config.use.get()
+    expect(globalPrecedenceWellKnown.seen.wellKnownAuthorization).toBe("Bearer test-token")
+  }),
 )
 
 const trailingSlashWellKnown = wellKnown({
