@@ -367,13 +367,24 @@ const layer = Layer.effect(
           return mergePluginOrigins(source, next.plugin, kind)
         }
 
+        // Remote well-known configs are fetched before anything else (their tokens feed authEnv for
+        // {env:} substitution in all later config sources) but merged after the user's own global
+        // config, so centrally managed policy wins over personal overrides. Project config and
+        // managed config still outrank well-known config.
+        const wellKnownConfigs: Array<{ source: string; next: Info }> = []
+
         for (const [key, value] of Object.entries(auth)) {
           if (value.type === "wellknown") {
             const url = key.replace(/\/+$/, "")
             authEnv[value.key] = value.token
             const wellknownURL = `${url}/.well-known/opencode`
             yield* Effect.logDebug("fetching remote config", { url: wellknownURL })
-            const wellknown = yield* fetchRemoteJson(wellknownURL, undefined, ConfigV1.WellKnown, url)
+            const wellknown = yield* fetchRemoteJson(
+              wellknownURL,
+              { Authorization: `Bearer ${value.token}` },
+              ConfigV1.WellKnown,
+              url,
+            )
             const remote = yield* Effect.promise(() =>
               substituteWellKnownRemoteConfig({
                 value: wellknown.remote_config,
@@ -404,13 +415,15 @@ const layer = Layer.effect(
               },
               authEnv,
             )
-            yield* merge(source, next, "global")
+            wellKnownConfigs.push({ source, next })
             yield* Effect.logDebug("loaded remote config from well-known", { url })
           }
         }
 
         const global = Object.keys(authEnv).length ? yield* loadGlobal(authEnv) : yield* getGlobal()
         yield* merge(Global.Path.config, global, "global")
+
+        for (const item of wellKnownConfigs) yield* merge(item.source, item.next, "global")
 
         if (Flag.OPENCODE_CONFIG) {
           yield* merge(Flag.OPENCODE_CONFIG, yield* loadFile(Flag.OPENCODE_CONFIG, authEnv))
