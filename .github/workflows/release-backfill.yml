@@ -1,0 +1,51 @@
+name: release-backfill
+
+# One-off: publish artifacts from an existing successful release.yml run without rebuilding.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run-id:
+        description: "Source run id (with the artifacts)"
+        required: true
+        type: string
+      version:
+        description: "Version tag (without v)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          run-id: ${{ inputs.run-id }}
+          path: artifacts
+          merge-multiple: true
+          github-token: ${{ github.token }}
+
+      - name: Stage and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p release
+          for dir in artifacts/opencode-*/; do
+            name=$(basename "$dir")
+            if [ -f "$dir/bin/opencode" ]; then cp "$dir/bin/opencode" "release/$name"; fi
+            if [ -f "$dir/bin/opencode.exe" ]; then cp "$dir/bin/opencode.exe" "release/$name.exe"; fi
+          done
+          find artifacts -maxdepth 1 -type f \
+            \( -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.blockmap" -o -name "latest*.yml" \) -exec cp {} release/ \;
+          find release -type f
+
+          gh release create "v$VERSION" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "OpenCode $VERSION (Circuitry)" \
+            --notes "Circuitry fork build: upstream dev + enterprise patches (well-known precedence, desktop login/logout, managed MCP/skills). Unsigned builds."

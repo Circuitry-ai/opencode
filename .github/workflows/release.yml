@@ -97,13 +97,25 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Create release
+      - name: Stage release files
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          find artifacts -type f | head -40
-          gh release create "v$VERSION" "artifacts/**/*" \
+          mkdir -p release
+          # CLI: flatten dist/<platform>/bin/opencode(.exe); skip the per-platform package.json
+          for dir in artifacts/opencode-*/; do
+            name=$(basename "$dir")
+            if [ -f "$dir/bin/opencode" ]; then cp "$dir/bin/opencode" "release/$name"; fi
+            if [ -f "$dir/bin/opencode.exe" ]; then cp "$dir/bin/opencode.exe" "release/$name.exe"; fi
+          done
+          # Desktop: artifacts are already flat files
+          find artifacts -maxdepth 1 -type f \
+            \( -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.blockmap" -o -name "latest*.yml" \) -exec cp {} release/ \;
+          find release -type f
+
+          gh release create "v$VERSION" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "OpenCode $VERSION (Circuitry)" \
             --notes "Circuitry fork build: upstream dev + enterprise patches (well-known precedence, desktop login/logout, managed MCP/skills). Unsigned builds." \
