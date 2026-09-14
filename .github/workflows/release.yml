@@ -32,28 +32,11 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: cli-darwin-linux
+          name: cli-binaries
           path: |
             packages/opencode/dist/opencode-darwin*
             packages/opencode/dist/opencode-linux*
-          if-no-files-found: error
-
-  build-cli-windows:
-    runs-on: windows-latest
-    env:
-      OPENCODE_VERSION: ${{ inputs.version }}
-      OPENCODE_RELEASE: ""
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-bun
-
-      - name: Build CLI (windows)
-        run: bun run --cwd packages/opencode script/build.ts
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: cli-windows
-          path: packages/opencode/dist/opencode-windows*
+            packages/opencode/dist/opencode-windows*
           if-no-files-found: error
 
   build-desktop:
@@ -106,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [build-cli, build-cli-windows, build-desktop]
+    needs: [build-cli, build-desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v6
