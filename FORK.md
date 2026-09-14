@@ -1,53 +1,48 @@
-# Circuitry fork of OpenCode
+# Fork development guide
 
-Enterprise opencode distribution for Circuitry. The `release` branch tracks upstream `dev`
-plus our patches; releases are built by the [`release` workflow](.github/workflows/release.yml)
-(workflow_dispatch → version input) and published to
-[GitHub Releases](https://github.com/Circuitry-ai/opencode/releases).
+## Local end-to-end testing (no builds, no releases)
 
-## Fork patches (vs upstream dev)
-
-1. **Well-known precedence** — enterprise remote config outranks the user's personal global
-   config (managed policy wins); the stored credential is sent as a Bearer token on the
-   well-known fetch.
-2. **Enterprise login/logout UI** — Settings → Providers "Company server" card and a status
-   popover badge (sign in/out + signed-in email). Login drives the control-plane device flow
-   and stores the credential through the existing `auth.set`/`auth.remove` API; the desktop
-   main process installs the enterprise guard plugin after login.
-   Default server: `https://opencode.circuitry.ai`.
-
-## Install (team)
+The app has a Playwright e2e harness that runs the **real renderer** against a **mocked server +
+mocked control plane** — the full login/logout flow in ~8 seconds:
 
 ```bash
-# CLI — download the binary for your platform from the latest release, e.g.
-curl -fsSLO https://github.com/Circuitry-ai/opencode/releases/latest/download/opencode-darwin-arm64
-chmod +x opencode-darwin-arm64 && sudo mv opencode-darwin-arm64 /usr/local/bin/opencode
-
-# Desktop — grab the .dmg / .exe / .deb / .rpm from the same release page.
+cd packages/app
+bunx playwright install chromium        # one-time
+bunx playwright test e2e/regression/enterprise-login.spec.ts
 ```
 
-Builds are **unsigned** — first run on macOS needs the quarantine flag removed:
+It verifies: sign-in from the home sidebar → device flow (mocked control plane) → credential
+stored via the real `auth.set` API → signed-in row with email → sign-out confirmation →
+spinner → credential removed. Any renderer error (console/pageerror) fails the test.
+
+For control-plane logic itself (device flow, config distribution, MCP server, manage API):
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/OpenCode.app"   # after moving it to /Applications
+cd ../opencode-control-plane  # separate repo
+npm test                      # 14 unit tests, ~1s
 ```
 
-macOS shows "damaged and can't be opened" for quarantined unsigned apps; the `xattr` command
-above is the fix (Windows SmartScreen: More info → Run anyway). Auto-update points at this
-fork's releases, not anomalyco's. The desktop app embeds the fork's opencode server directly
-(the `release` branch source), so fork patches apply inside the desktop too.
+Live local stack (real control plane, real SSO — dev tenant):
+1. Control plane: `npm run dev` (hot reload, http://localhost:4400)
+2. Desktop: `bun run dev:desktop` from the fork root — electron-vite dev mode with hot reload of
+   the renderer (packages/app source). In the login dialog, set the server to
+   `http://localhost:4400`.
 
-After install, sign in once:
+## Making a release (after local verification)
 
 ```bash
-opencode auth login https://opencode.circuitry.ai
+git push fork release
+gh workflow run release.yml -R Circuitry-ai/opencode --ref release -f version=1.18.30-cp.N
 ```
 
-or use the desktop app's Company server sign-in.
+~15 min later all artifacts land on
+[releases](https://github.com/Circuitry-ai/opencode/releases) (CLI binaries + desktop +
+auto-update metadata).
 
-## Making a release
+## Recent fixes worth knowing
 
-1. Rebase `release` on upstream `dev` (and our patches), push to the fork.
-2. Actions → release → Run workflow → pick a version (e.g. `1.18.31-cp.1`).
-3. All artifacts (CLI binaries for darwin/linux/windows + desktop packages + auto-update
-   metadata) attach to the new release automatically.
+- SolidJS components run once — never branch on a signal at the top level of a component; use
+  `<Show>` (the home row/badge had this bug: signed-in state only appeared after app restart).
+- The login dialog must close itself after success (`dialog.close()` after `onDone`).
+- The control plane sends CORS headers app-wide (renderers fetch well-known/login cross-origin).
+- Device-flow poll responses are `token:<...>\nEMAIL:<...>`; the CLI extracts only the token line.
