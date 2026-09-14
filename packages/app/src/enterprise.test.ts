@@ -1,5 +1,22 @@
 import { describe, expect, test } from "bun:test"
 import { parseDeviceResponse, parsePollResponse, DEFAULT_ENTERPRISE_URL } from "./enterprise-utils"
+import { readEnterprise, writeEnterprise } from "./enterprise-utils"
+
+describe("enterprise state persistence", () => {
+  test("round-trips through localStorage", () => {
+    writeEnterprise({ url: "https://opencode.circuitry.ai", email: "user@example.com" })
+    expect(readEnterprise()).toEqual({ url: "https://opencode.circuitry.ai", email: "user@example.com" })
+
+    writeEnterprise(undefined)
+    expect(readEnterprise()).toBeUndefined()
+  })
+
+  test("corrupt stored state is ignored", () => {
+    localStorage.setItem("opencode-enterprise", "{not json")
+    expect(readEnterprise()).toBeUndefined()
+    localStorage.removeItem("opencode-enterprise")
+  })
+})
 
 describe("parseDeviceResponse", () => {
   test("parses session, open url, and interval", () => {
