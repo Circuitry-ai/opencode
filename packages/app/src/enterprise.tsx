@@ -41,6 +41,7 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
   const language = useLanguage()
   const serverSDK = useServerSDK()
   const platform = usePlatform()
+  const dialog = useDialog()
   const [stage, setStage] = createSignal<"idle" | "starting" | "waiting">("idle")
   const [error, setError] = createSignal("")
   const [server, setServer] = createSignal(readEnterprise()?.url ?? DEFAULT_ENTERPRISE_URL)
@@ -52,6 +53,7 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
       const state = await login(serverSDK, platform, server(), setStage)
       showToast({ variant: "success", icon: "circle-check", title: language.t("enterprise.login.success") })
       props.onDone(state.email)
+      dialog.close()
     } catch (err) {
       setStage("idle")
       setError(err instanceof Error ? err.message : String(err))
@@ -165,49 +167,53 @@ export const EnterpriseHomeNav: Component = () => {
     ))
   }
 
-  if (!state()) {
-    return (
-      <button
-        type="button"
-        class={HOME_NAV_ROW}
-        onClick={() =>
-          void dialog.show(() => (
-            <DialogEnterpriseLogin
-              onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
-            />
-          ))
-        }
-      >
-        <span class="size-2 shrink-0 rounded-full bg-v2-icon-icon-muted" />
-        <span class={HOME_NAV_LABEL}>{language.t("enterprise.signIn")}</span>
-      </button>
-    )
-  }
   return (
-    <div class={HOME_NAV_ROW}>
-      <Show
-        when={!signingOut()}
-        fallback={
-          <>
-            <Spinner class="size-3.5 shrink-0 text-v2-icon-icon-muted" />
-            <span class={HOME_NAV_LABEL}>{language.t("enterprise.signOut.busy")}</span>
-          </>
-        }
-      >
-        <span class="size-2 shrink-0 rounded-full bg-[var(--status-color-success, #3fb950)]" />
-        <span class={HOME_NAV_LABEL} title={state()!.email || state()!.url}>
-          {language.t("enterprise.signedInAs")}{" "}
-          <span class="text-v2-text-text-base">{state()!.email || state()!.url}</span>
-        </span>
+    <Show
+      when={state()}
+      fallback={
         <button
           type="button"
-          class="text-12-regular text-v2-text-text-faint hover:text-v2-text-text-base shrink-0 cursor-default"
-          onClick={confirmSignOut}
+          class={HOME_NAV_ROW}
+          onClick={() =>
+            void dialog.show(() => (
+              <DialogEnterpriseLogin
+                onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
+              />
+            ))
+          }
         >
-          {language.t("enterprise.signOut")}
+          <span class="size-2 shrink-0 rounded-full bg-v2-icon-icon-muted" />
+          <span class={HOME_NAV_LABEL}>{language.t("enterprise.signIn")}</span>
         </button>
-      </Show>
-    </div>
+      }
+    >
+      {(current) => (
+        <div class={HOME_NAV_ROW}>
+          <Show
+            when={!signingOut()}
+            fallback={
+              <>
+                <Spinner class="size-3.5 shrink-0 text-v2-icon-icon-muted" />
+                <span class={HOME_NAV_LABEL}>{language.t("enterprise.signOut.busy")}</span>
+              </>
+            }
+          >
+            <span class="size-2 shrink-0 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+            <span class={HOME_NAV_LABEL} title={current().email || current().url}>
+              {language.t("enterprise.signedInAs")}{" "}
+              <span class="text-v2-text-text-base">{current().email || current().url}</span>
+            </span>
+            <button
+              type="button"
+              class="text-12-regular text-v2-text-text-faint hover:text-v2-text-text-base shrink-0 cursor-default"
+              onClick={confirmSignOut}
+            >
+              {language.t("enterprise.signOut")}
+            </button>
+          </Show>
+        </div>
+      )}
+    </Show>
   )
 }
 
@@ -234,44 +240,48 @@ export const EnterpriseBadge: Component = () => {
     ))
   }
 
-  if (!state()) {
-    return (
-      <div class="flex items-center justify-between w-full px-3 py-1">
-        <span class="text-12-regular text-text-weak">{language.t("enterprise.title")}</span>
-        <Button
-          size="large"
-          variant="ghost"
-          onClick={() =>
-            void dialog.show(() => (
-              <DialogEnterpriseLogin
-                onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
-              />
-            ))
-          }
-        >
-          {language.t("enterprise.signIn")}
-        </Button>
-      </div>
-    )
-  }
   return (
-    <div class="flex items-center justify-between w-full px-3 py-1">
-      <div class="flex items-center gap-2 min-w-0">
-        <Show
-          when={!signingOut()}
-          fallback={<Spinner class="size-3 shrink-0 text-v2-icon-icon-muted" />}
-        >
-          <span class="size-2 rounded-full bg-[var(--status-color-success, #3fb950)]" />
-        </Show>
-        <span class="text-12-regular text-text-base truncate">
-          {signingOut()
-            ? language.t("enterprise.signOut.busy")
-            : `${language.t("enterprise.signedInAs")} ${state()!.email || state()!.url}`}
+    <Show
+      when={state()}
+      fallback={
+        <div class="flex items-center justify-between w-full px-3 py-1">
+          <span class="text-12-regular text-text-weak">{language.t("enterprise.title")}</span>
+          <Button
+            size="large"
+            variant="ghost"
+            onClick={() =>
+              void dialog.show(() => (
+                <DialogEnterpriseLogin
+                  onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
+                />
+              ))
+            }
+          >
+            {language.t("enterprise.signIn")}
+          </Button>
+        </div>
+      }
+    >
+      {(current) => (
+        <div class="flex items-center justify-between w-full px-3 py-1">
+          <div class="flex items-center gap-2 min-w-0">
+            <Show
+              when={!signingOut()}
+              fallback={<Spinner class="size-3 shrink-0 text-v2-icon-icon-muted" />}
+            >
+              <span class="size-2 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+            </Show>
+            <span class="text-12-regular text-text-base truncate">
+              {signingOut()
+                ? language.t("enterprise.signOut.busy")
+                : `${language.t("enterprise.signedInAs")} ${current().email || current().url}`}
         </span>
       </div>
       <Button size="large" variant="ghost" disabled={signingOut()} onClick={confirmSignOut}>
         {language.t("enterprise.signOut")}
       </Button>
-    </div>
+        </div>
+      )}
+    </Show>
   )
 }
