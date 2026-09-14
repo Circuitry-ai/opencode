@@ -56,6 +56,7 @@ jobs:
     env:
       OPENCODE_VERSION: ${{ inputs.version }}
       OPENCODE_RELEASE: ""
+      OPENCODE_CHANNEL: prod
       NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v6

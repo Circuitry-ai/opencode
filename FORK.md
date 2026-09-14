@@ -26,8 +26,16 @@ chmod +x opencode-darwin-arm64 && sudo mv opencode-darwin-arm64 /usr/local/bin/o
 # Desktop — grab the .dmg / .exe / .deb / .rpm from the same release page.
 ```
 
-Builds are **unsigned** (macOS Gatekeeper: right-click → Open; Windows SmartScreen: More info
-→ Run anyway). Auto-update points at this fork's releases, not anomalyco's.
+Builds are **unsigned** — first run on macOS needs the quarantine flag removed:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/OpenCode.app"   # after moving it to /Applications
+```
+
+macOS shows "damaged and can't be opened" for quarantined unsigned apps; the `xattr` command
+above is the fix (Windows SmartScreen: More info → Run anyway). Auto-update points at this
+fork's releases, not anomalyco's. The desktop app embeds the fork's opencode server directly
+(the `release` branch source), so fork patches apply inside the desktop too.
 
 After install, sign in once:
 
