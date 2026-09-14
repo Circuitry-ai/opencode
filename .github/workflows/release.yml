@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENCODE_VERSION: ${{ inputs.version }}
-      OPENCODE_RELEASE: ${{ inputs.version }}
+      OPENCODE_RELEASE: ""
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
@@ -42,7 +42,7 @@ jobs:
     runs-on: windows-latest
     env:
       OPENCODE_VERSION: ${{ inputs.version }}
-      OPENCODE_RELEASE: ${{ inputs.version }}
+      OPENCODE_RELEASE: ""
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
@@ -72,7 +72,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       OPENCODE_VERSION: ${{ inputs.version }}
-      OPENCODE_RELEASE: ${{ inputs.version }}
+      OPENCODE_RELEASE: ""
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
