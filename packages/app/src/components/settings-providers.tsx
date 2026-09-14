@@ -10,7 +10,6 @@ import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "./dialog-connect-provider"
 import { DialogCustomProvider } from "./dialog-custom-provider"
-import { EnterpriseSettingsRow } from "@/enterprise"
 import { SettingsList } from "./settings-list"
 import { SettingsServerPicker, SettingsServerScope } from "./settings-server-picker"
 
@@ -156,12 +155,6 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
       </div>
 
       <div class="flex flex-col gap-8 max-w-[720px]">
-        <div class="flex flex-col gap-1" data-component="enterprise-section">
-          <h3 class="text-14-medium text-text-strong pb-2">{language.t("enterprise.title")}</h3>
-          <SettingsList>
-            <EnterpriseSettingsRow />
-          </SettingsList>
-        </div>
         <div class="flex flex-col gap-1" data-component="connected-providers-section">
           <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.providers.section.connected")}</h3>
           <SettingsList>

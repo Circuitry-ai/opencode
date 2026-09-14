@@ -132,57 +132,55 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
   )
 }
 
-export const EnterpriseSettingsRow: Component = () => {
+const HOME_NAV_ROW = `
+  flex h-7 min-w-0 w-full shrink-0 items-center gap-2 rounded-[6px] px-1.5 text-left
+  text-v2-text-text-muted [font-weight:440] transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out
+  hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base
+`
+const HOME_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+
+// Home sidebar row (below the Settings button): sign-in button, or signed-in email + sign out.
+export const EnterpriseHomeNav: Component = () => {
   const language = useLanguage()
   const serverSDK = useServerSDK()
   const dialog = useDialog()
   const [state, setState] = createSignal(readEnterprise())
-
-  const openLogin = () => {
-    void dialog.show(() => (
-      <DialogEnterpriseLogin
-        onDone={(email) => {
-          setState({ url: readEnterprise()?.url ?? DEFAULT_ENTERPRISE_URL, email })
-        }}
-      />
-    ))
-  }
-
   const current = state()
-  return (
-    <div class="flex flex-wrap items-center justify-between gap-4 min-h-16 py-3 border-b border-border-weak-base last:border-none">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="size-5 shrink-0 rounded-full border border-border-weak-base flex items-center justify-center text-10-regular text-text-weak">
-          {current ? "✓" : ""}
-        </span>
-        <div class="flex flex-col min-w-0">
-          <span class="text-14-medium text-text-strong truncate">{language.t("enterprise.title")}</span>
-          <span class="text-12-regular text-text-weak truncate">
-            {current
-              ? `${language.t("enterprise.signedInAs")} ${current.email || current.url}`
-              : language.t("enterprise.description")}
-          </span>
-        </div>
-      </div>
-      <Show
-        when={current}
-        fallback={
-          <Button size="large" onClick={openLogin}>
-            {language.t("enterprise.signIn")}
-          </Button>
+
+  if (!current) {
+    return (
+      <button
+        type="button"
+        class={HOME_NAV_ROW}
+        onClick={() =>
+          void dialog.show(() => (
+            <DialogEnterpriseLogin
+              onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
+            />
+          ))
         }
       >
-        <Button
-          size="large"
-          variant="ghost"
-          onClick={() => {
-            void enterpriseLogout(serverSDK)
-            setState(undefined)
-          }}
-        >
-          {language.t("enterprise.signOut")}
-        </Button>
-      </Show>
+        <span class="size-2 shrink-0 rounded-full bg-v2-icon-icon-muted" />
+        <span class={HOME_NAV_LABEL}>{language.t("enterprise.signIn")}</span>
+      </button>
+    )
+  }
+  return (
+    <div class={HOME_NAV_ROW}>
+      <span class="size-2 shrink-0 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+      <span class={HOME_NAV_LABEL} title={current.email || current.url}>
+        {language.t("enterprise.signedInAs")} <span class="text-v2-text-text-base">{current.email || current.url}</span>
+      </span>
+      <button
+        type="button"
+        class="text-12-regular text-v2-text-text-faint hover:text-v2-text-text-base shrink-0 cursor-default"
+        onClick={() => {
+          void enterpriseLogout(serverSDK)
+          setState(undefined)
+        }}
+      >
+        {language.t("enterprise.signOut")}
+      </button>
     </div>
   )
 }

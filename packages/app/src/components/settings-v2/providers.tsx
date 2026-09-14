@@ -4,14 +4,12 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, createSignal, type Accessor, type Component, For, Show } from "solid-js"
+import { createMemo, type Accessor, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "../dialog-connect-provider"
 import { DialogCustomProvider } from "../dialog-custom-provider"
-import { DialogEnterpriseLogin, enterpriseLogout } from "@/enterprise"
-import { DEFAULT_ENTERPRISE_URL, readEnterprise } from "@/enterprise-utils"
 import { SettingsListV2 } from "./parts/list"
 import "./settings-v2.css"
 
@@ -30,59 +28,6 @@ const PROVIDER_NOTES = [
 ] as const
 
 const PROVIDER_ICON_SIZE = 16
-
-const EnterpriseSettingsRowV2: Component = () => {
-  const language = useLanguage()
-  const serverSdk = useServerSDK()
-  const dialog = useDialog()
-  const [state, setState] = createSignal(readEnterprise())
-
-  const current = state()
-  return (
-    <div class="settings-v2-provider-row">
-      <div class="settings-v2-provider-lead">
-        <div class="settings-v2-provider-main">
-          <span class="settings-v2-provider-name truncate">{language.t("enterprise.title")}</span>
-          <Show when={current}>
-            <Tag>{language.t("enterprise.signedInAs")}</Tag>
-          </Show>
-        </div>
-        <span class="settings-v2-provider-env-hint truncate">
-          {current ? current.email || current.url : language.t("enterprise.description")}
-        </span>
-      </div>
-      <Show
-        when={current}
-        fallback={
-          <ButtonV2
-            size="normal"
-            variant="ghost-muted"
-            onClick={() =>
-              void dialog.show(() => (
-                <DialogEnterpriseLogin
-                  onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
-                />
-              ))
-            }
-          >
-            {language.t("enterprise.signIn")}
-          </ButtonV2>
-        }
-      >
-        <ButtonV2
-          size="normal"
-          variant="ghost-muted"
-          onClick={() => {
-            void enterpriseLogout(serverSdk)
-            setState(undefined)
-          }}
-        >
-          {language.t("enterprise.signOut")}
-        </ButtonV2>
-      </Show>
-    </div>
-  )
-}
 
 export const SettingsProvidersV2: Component<{
   directory: Accessor<string | undefined>
@@ -204,12 +149,6 @@ export const SettingsProvidersV2: Component<{
       </div>
 
       <div class="settings-v2-tab-body settings-v2-providers">
-        <div class="settings-v2-section" data-component="enterprise-section">
-          <h3 class="settings-v2-section-title">{language.t("enterprise.title")}</h3>
-          <SettingsListV2>
-            <EnterpriseSettingsRowV2 />
-          </SettingsListV2>
-        </div>
         <div class="settings-v2-section" data-component="connected-providers-section">
           <h3 class="settings-v2-section-title">{language.t("settings.providers.section.connected")}</h3>
           <SettingsListV2>
