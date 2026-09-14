@@ -188,7 +188,9 @@ const defaultSettings: Settings = {
     showFileTree: false,
     showNavigation: false,
     showSearch: false,
-    showStatus: false,
+    // Circuitry fork: the status popover (servers/MCP/LSP) is the main entry point for
+    // enterprise MCP authentication, so the title bar indicator is on by default.
+    showStatus: true,
     showTerminal: false,
     showReasoningSummaries: false,
     shellToolPartsExpanded: false,

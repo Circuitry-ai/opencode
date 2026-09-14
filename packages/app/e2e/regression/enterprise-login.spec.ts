@@ -79,6 +79,9 @@ test("enterprise sign in and sign out from the home sidebar", async ({ page }) =
     onDisconnectKey: (providerID) => disconnects.push(providerID),
     sessions: [],
     pageMessages: () => ({ items: [] }),
+    fileList: (path) =>
+      path ? [] : [{ name: "enterprise-e2e", path: "enterprise-e2e", absolute: directory, type: "directory", ignored: false }],
+    findFiles: () => ["enterprise-e2e"],
   })
 
   await page.addInitScript(() => {
@@ -130,4 +133,13 @@ test("enterprise sign in and sign out from the home sidebar", async ({ page }) =
 
   // No renderer crashes anywhere in the flow
   expect(consoleErrors).toEqual([])
+
+  // Fork default: the status indicator (servers/MCP/LSP popover) shows in the title bar
+  // once a project is open — it is the entry point for enterprise MCP authentication.
+  const addProject = page.locator('[data-action="home-add-project-row"]')
+  await expectAppVisible(addProject)
+  await addProject.click()
+  await page.locator("[data-directory-path]").click()
+  await page.locator('[data-action="home-new-session"]').click()
+  await expectAppVisible(page.getByRole("button", { name: "Status" }))
 })
