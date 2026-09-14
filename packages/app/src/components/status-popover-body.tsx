@@ -8,6 +8,7 @@ import { useNavigate } from "@solidjs/router"
 import { type Accessor, createEffect, createMemo, For, type JSXElement, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { ServerHealthIndicator, ServerRow } from "@/components/server/server-row"
+import { EnterpriseBadge } from "@/enterprise"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { ServerConnection, useServer } from "@/context/server"
@@ -150,7 +151,9 @@ export function StatusPopoverServerBody() {
   )
 
   return (
-    <ServerStatusPopoverView
+    <div class="flex flex-col w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)] overflow-hidden bg-background-strong">
+      <EnterpriseBadge />
+      <ServerStatusPopoverView
       state={{
         servers: serverItems,
         defaultKey: defaultServer.key,
@@ -166,13 +169,14 @@ export function StatusPopoverServerBody() {
           })
         },
       }}
-    />
+      />
+    </div>
   )
 }
 
 function ServerStatusPopoverView(props: { state: ServerStatusState }) {
   return (
-    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+    <div class="flex items-center gap-1 w-full">
       <Tabs
         aria-label={props.state.ariaLabel}
         class="tabs bg-background-strong rounded-xl overflow-hidden"
@@ -298,7 +302,9 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
 
   return (
-    <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
+    <div class="flex flex-col w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)] overflow-hidden">
+      <EnterpriseBadge />
+      <div class="flex items-center gap-1">
       <Tabs
         aria-label={language.t("status.popover.ariaLabel")}
         class="tabs bg-background-strong rounded-xl overflow-hidden"
@@ -509,6 +515,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           </Tabs.Content>
         </Show>
       </Tabs>
+      </div>
     </div>
   )
 }

@@ -96,6 +96,20 @@ export function registerIpcHandlers(deps: Deps) {
   ipcMain.handle("updater-install", () => deps.updater.install())
   ipcMain.handle("set-background-color", (_event: IpcMainInvokeEvent, color: string) => deps.setBackgroundColor(color))
   ipcMain.handle("export-debug-logs", () => deps.exportDebugLogs())
+  ipcMain.handle("download-enterprise-plugin", async (_event: IpcMainInvokeEvent, url: string) => {
+    // Fetches the enterprise guard plugin served by the control plane and installs it where
+    // the enterprise config expects it ({env:HOME}/.config/opencode/plugins/).
+    if (!/^https?:\/\//.test(url)) throw new Error("invalid url")
+    const response = await fetch(`${url.replace(/\/+$/, "")}/plugin/enterprise-guard.ts`)
+    if (!response.ok) throw new Error(`download failed (${response.status})`)
+    const content = await response.text()
+    const { writeFile, mkdir } = await import("node:fs/promises")
+    const configDir = process.env.XDG_CONFIG_HOME ?? join(app.getPath("home"), ".config")
+    const pluginsDir = join(configDir, "opencode", "plugins")
+    await mkdir(pluginsDir, { recursive: true })
+    await writeFile(join(pluginsDir, "enterprise-guard.ts"), content, "utf8")
+    return true
+  })
   ipcMain.handle("set-force-focus", (event: IpcMainInvokeEvent, enabled: boolean) =>
     setForceFocus(event.sender, enabled),
   )

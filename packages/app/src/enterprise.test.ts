@@ -1,0 +1,40 @@
+import { describe, expect, test } from "bun:test"
+import { parseDeviceResponse, parsePollResponse, DEFAULT_ENTERPRISE_URL } from "./enterprise-utils"
+
+describe("parseDeviceResponse", () => {
+  test("parses session, open url, and interval", () => {
+    const parsed = parseDeviceResponse("SESSION=abc-123\nOPEN=https://auth.example/activate?user_code=XY\nINTERVAL=5")
+    expect(parsed.session).toBe("abc-123")
+    expect(parsed.open).toBe("https://auth.example/activate?user_code=XY")
+    expect(parsed.interval).toBe(5)
+  })
+
+  test("defaults interval to 2 and leaves missing fields undefined", () => {
+    const parsed = parseDeviceResponse("SESSION=abc")
+    expect(parsed.session).toBe("abc")
+    expect(parsed.open).toBeUndefined()
+    expect(parsed.interval).toBe(2)
+  })
+})
+
+describe("parsePollResponse", () => {
+  test("extracts token and email lines", () => {
+    const parsed = parsePollResponse("token:0123456789abcdef\nEMAIL:user@example.com")
+    expect(parsed.token).toBe("0123456789abcdef")
+    expect(parsed.email).toBe("user@example.com")
+  })
+
+  test("token ignores extra lines after the token line", () => {
+    const parsed = parsePollResponse("token:secret-token\nEMAIL:x@example.com\nanything else")
+    expect(parsed.token).toBe("secret-token")
+  })
+
+  test("pending responses have no token", () => {
+    const parsed = parsePollResponse("pending")
+    expect(parsed.token).toBeUndefined()
+  })
+})
+
+test("default enterprise url is the production control plane", () => {
+  expect(DEFAULT_ENTERPRISE_URL).toBe("https://opencode.circuitry.ai")
+})
