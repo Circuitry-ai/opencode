@@ -1,14 +1,15 @@
 import { createSignal, Show, type Component } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { useServerSDK } from "@/context/server-sdk"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { showToast } from "@/utils/toast"
 
-export { DEFAULT_ENTERPRISE_URL, parseDeviceResponse, parsePollResponse, readEnterprise, writeEnterprise, type EnterpriseState } from "./enterprise-utils"
-import { DEFAULT_ENTERPRISE_URL, parseDeviceResponse, parsePollResponse, readEnterprise, writeEnterprise, type EnterpriseState } from "./enterprise-utils"
+export { DEFAULT_ENTERPRISE_URL, parseDeviceResponse, parsePollResponse, readEnterprise, writeEnterprise, enterpriseLogin, enterpriseLogout, type EnterpriseState } from "./enterprise-utils"
+import { DEFAULT_ENTERPRISE_URL, readEnterprise, enterpriseLogin, enterpriseLogout, type EnterpriseState } from "./enterprise-utils"
 
 type DesktopBridge = { api?: { downloadEnterprisePlugin?: (url: string) => Promise<boolean> } }
 
@@ -17,55 +18,23 @@ async function installEnterprisePlugin(url: string) {
   await bridge?.downloadEnterprisePlugin?.(url)
 }
 
-export async function enterpriseLogin(
-  serverSDK: ReturnType<typeof useServerSDK>,
-  platform: ReturnType<typeof usePlatform>,
-  baseUrl: string,
-  onProgress: (stage: "starting" | "waiting") => void,
-): Promise<EnterpriseState> {
-  const url = baseUrl.replace(/\/+$/, "")
-  const wellknown = (await fetch(`${url}/.well-known/opencode`).then((response) => {
-    if (!response.ok) throw new Error(`cannot reach ${url}`)
-    return response.json()
-  })) as { auth?: { env?: string } }
-  const credentialKey = wellknown.auth?.env ?? "CORP_TOKEN"
-
-  onProgress("starting")
-  const device = await fetch(`${url}/login/device`, { method: "POST" }).then((response) => {
-    if (!response.ok) throw new Error(`login start failed (${response.status})`)
-    return response.text()
-  })
-  const { session, open, interval } = parseDeviceResponse(device)
-  if (!session || !open) throw new Error("invalid login session from server")
-
-  onProgress("waiting")
-  platform.openExternal(open)
-  const deadline = Date.now() + 15 * 60_000
-  for (;;) {
-    if (Date.now() > deadline) throw new Error("login timed out")
-    await new Promise((resolve) => setTimeout(resolve, Math.max(1, interval) * 1000))
-    const poll = await fetch(`${url}/login/session/${session}`).then((response) => response.text())
-    if (poll.startsWith("error:")) throw new Error(poll.slice("error:".length))
-    const { token, email } = parsePollResponse(poll)
-    if (token) {
-      await serverSDK().client.auth.set({ providerID: url, auth: { type: "wellknown", key: credentialKey, token } })
-      await serverSDK().client.global.dispose().catch(() => undefined)
-      const state = { url, email: email ?? "" }
-      writeEnterprise(state)
-      await installEnterprisePlugin(url).catch(() => undefined)
-      return state
-    }
+function enterpriseClient(serverSDK: ReturnType<typeof useServerSDK>) {
+  return {
+    setCredential: (providerID: string, auth: unknown) => serverSDK().client.auth.set({ providerID, auth: auth as never }),
+    removeCredential: (providerID: string) => serverSDK().client.auth.remove({ providerID }),
+    dispose: () => serverSDK().client.global.dispose(),
   }
 }
 
-export async function enterpriseLogout(serverSDK: ReturnType<typeof useServerSDK>) {
-  const state = readEnterprise()
-  writeEnterprise(undefined)
-  if (!state) return
-  await serverSDK()
-    .client.auth.remove({ providerID: state.url })
-    .catch(() => undefined)
-  await serverSDK().client.global.dispose().catch(() => undefined)
+async function login(
+  serverSDK: ReturnType<typeof useServerSDK>,
+  platform: ReturnType<typeof usePlatform>,
+  url: string,
+  onProgress: (stage: "starting" | "waiting") => void,
+): Promise<EnterpriseState> {
+  const state = await enterpriseLogin(enterpriseClient(serverSDK), (open) => platform.openExternal(open), url, onProgress)
+  await installEnterprisePlugin(url).catch(() => undefined)
+  return state
 }
 
 export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void }> = (props) => {
@@ -80,7 +49,7 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
   const start = async () => {
     setError("")
     try {
-      const state = await enterpriseLogin(serverSDK, platform, server(), setStage)
+      const state = await login(serverSDK, platform, server(), setStage)
       showToast({ variant: "success", icon: "circle-check", title: language.t("enterprise.login.success") })
       props.onDone(state.email)
     } catch (err) {
@@ -107,13 +76,9 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
         <Show
           when={stage() === "idle"}
           fallback={
-            <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-3">
+              <Spinner class="size-4 shrink-0 text-v2-icon-icon-muted" />
               <span class="text-14-regular text-text-base">{language.t("enterprise.login.waiting")}</span>
-              <Show when={openUrl()}>
-                <Button variant="ghost" size="large" onClick={() => openUrl() && platform.openExternal(openUrl())}>
-                  {language.t("enterprise.login.reopen")}
-                </Button>
-              </Show>
             </div>
           }
         >
@@ -132,6 +97,43 @@ export const DialogEnterpriseLogin: Component<{ onDone: (email: string) => void 
   )
 }
 
+export const DialogSignOutConfirm: Component<{ onConfirm: () => Promise<void> | void }> = (props) => {
+  const language = useLanguage()
+  const dialog = useDialog()
+  const [busy, setBusy] = createSignal(false)
+
+  return (
+    <Dialog title={language.t("enterprise.signOut.confirm.title")} description={language.t("enterprise.signOut.confirm.description")}>
+      <div class="flex justify-end items-center gap-2 p-4">
+        <Button size="large" variant="secondary" disabled={busy()} onClick={() => dialog.close()}>
+          {language.t("common.cancel")}
+        </Button>
+        <Button
+          size="large"
+          disabled={busy()}
+          onClick={() => {
+            setBusy(true)
+            void (async () => {
+              try {
+                await props.onConfirm()
+              } finally {
+                dialog.close()
+              }
+            })()
+          }}
+        >
+          <Show when={busy()} fallback={language.t("enterprise.signOut")}>
+            <span class="flex items-center gap-2">
+              <Spinner class="size-4" />
+              {language.t("enterprise.signOut.busy")}
+            </span>
+          </Show>
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
 const HOME_NAV_ROW = `
   flex h-7 min-w-0 w-full shrink-0 items-center gap-2 rounded-[6px] px-1.5 text-left
   text-v2-text-text-muted [font-weight:440] transition-[background-color,color,box-shadow] duration-[120ms] ease-in-out
@@ -145,9 +147,25 @@ export const EnterpriseHomeNav: Component = () => {
   const serverSDK = useServerSDK()
   const dialog = useDialog()
   const [state, setState] = createSignal(readEnterprise())
-  const current = state()
+  const [signingOut, setSigningOut] = createSignal(false)
 
-  if (!current) {
+  const confirmSignOut = () => {
+    void dialog.show(() => (
+      <DialogSignOutConfirm
+        onConfirm={async () => {
+          setSigningOut(true)
+          try {
+            await enterpriseLogout(enterpriseClient(serverSDK))
+            setState(undefined)
+          } finally {
+            setSigningOut(false)
+          }
+        }}
+      />
+    ))
+  }
+
+  if (!state()) {
     return (
       <button
         type="button"
@@ -167,20 +185,28 @@ export const EnterpriseHomeNav: Component = () => {
   }
   return (
     <div class={HOME_NAV_ROW}>
-      <span class="size-2 shrink-0 rounded-full bg-[var(--status-color-success, #3fb950)]" />
-      <span class={HOME_NAV_LABEL} title={current.email || current.url}>
-        {language.t("enterprise.signedInAs")} <span class="text-v2-text-text-base">{current.email || current.url}</span>
-      </span>
-      <button
-        type="button"
-        class="text-12-regular text-v2-text-text-faint hover:text-v2-text-text-base shrink-0 cursor-default"
-        onClick={() => {
-          void enterpriseLogout(serverSDK)
-          setState(undefined)
-        }}
+      <Show
+        when={!signingOut()}
+        fallback={
+          <>
+            <Spinner class="size-3.5 shrink-0 text-v2-icon-icon-muted" />
+            <span class={HOME_NAV_LABEL}>{language.t("enterprise.signOut.busy")}</span>
+          </>
+        }
       >
-        {language.t("enterprise.signOut")}
-      </button>
+        <span class="size-2 shrink-0 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+        <span class={HOME_NAV_LABEL} title={state()!.email || state()!.url}>
+          {language.t("enterprise.signedInAs")}{" "}
+          <span class="text-v2-text-text-base">{state()!.email || state()!.url}</span>
+        </span>
+        <button
+          type="button"
+          class="text-12-regular text-v2-text-text-faint hover:text-v2-text-text-base shrink-0 cursor-default"
+          onClick={confirmSignOut}
+        >
+          {language.t("enterprise.signOut")}
+        </button>
+      </Show>
     </div>
   )
 }
@@ -190,9 +216,25 @@ export const EnterpriseBadge: Component = () => {
   const serverSDK = useServerSDK()
   const dialog = useDialog()
   const [state, setState] = createSignal(readEnterprise())
-  const current = state()
+  const [signingOut, setSigningOut] = createSignal(false)
 
-  if (!current) {
+  const confirmSignOut = () => {
+    void dialog.show(() => (
+      <DialogSignOutConfirm
+        onConfirm={async () => {
+          setSigningOut(true)
+          try {
+            await enterpriseLogout(enterpriseClient(serverSDK))
+            setState(undefined)
+          } finally {
+            setSigningOut(false)
+          }
+        }}
+      />
+    ))
+  }
+
+  if (!state()) {
     return (
       <div class="flex items-center justify-between w-full px-3 py-1">
         <span class="text-12-regular text-text-weak">{language.t("enterprise.title")}</span>
@@ -201,7 +243,9 @@ export const EnterpriseBadge: Component = () => {
           variant="ghost"
           onClick={() =>
             void dialog.show(() => (
-              <DialogEnterpriseLogin onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })} />
+              <DialogEnterpriseLogin
+                onDone={() => setState(readEnterprise() ?? { url: DEFAULT_ENTERPRISE_URL, email: "" })}
+              />
             ))
           }
         >
@@ -213,19 +257,19 @@ export const EnterpriseBadge: Component = () => {
   return (
     <div class="flex items-center justify-between w-full px-3 py-1">
       <div class="flex items-center gap-2 min-w-0">
-        <span class="size-2 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+        <Show
+          when={!signingOut()}
+          fallback={<Spinner class="size-3 shrink-0 text-v2-icon-icon-muted" />}
+        >
+          <span class="size-2 rounded-full bg-[var(--status-color-success, #3fb950)]" />
+        </Show>
         <span class="text-12-regular text-text-base truncate">
-          {language.t("enterprise.signedInAs")} <span class="font-medium">{current.email || current.url}</span>
+          {signingOut()
+            ? language.t("enterprise.signOut.busy")
+            : `${language.t("enterprise.signedInAs")} ${state()!.email || state()!.url}`}
         </span>
       </div>
-      <Button
-        size="large"
-        variant="ghost"
-        onClick={() => {
-          void enterpriseLogout(serverSDK)
-          setState(undefined)
-        }}
-      >
+      <Button size="large" variant="ghost" disabled={signingOut()} onClick={confirmSignOut}>
         {language.t("enterprise.signOut")}
       </Button>
     </div>

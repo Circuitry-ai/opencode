@@ -1,6 +1,41 @@
 import { describe, expect, test } from "bun:test"
 import { parseDeviceResponse, parsePollResponse, DEFAULT_ENTERPRISE_URL } from "./enterprise-utils"
 import { readEnterprise, writeEnterprise } from "./enterprise-utils"
+import { enterpriseLogout } from "./enterprise-utils"
+
+describe("enterpriseLogout", () => {
+  test("clears stored state, removes credential, then disposes — and never throws", async () => {
+    writeEnterprise({ url: "https://opencode.circuitry.ai", email: "user@example.com" })
+    const calls: string[] = []
+    const client = {
+      setCredential: async () => {},
+      removeCredential: async () => {
+        calls.push("remove")
+        throw new Error("network down")
+      },
+      dispose: async () => {
+        calls.push("dispose")
+      },
+    }
+
+    await enterpriseLogout(client)
+
+    expect(readEnterprise()).toBeUndefined()
+    expect(calls).toEqual(["remove", "dispose"])
+  })
+
+  test("no-op when not signed in", async () => {
+    writeEnterprise(undefined)
+    let removed = false
+    const client = {
+      setCredential: async () => {},
+      removeCredential: async () => (removed = true),
+      dispose: async () => {},
+    }
+    await enterpriseLogout(client)
+    expect(removed).toBeFalse()
+  })
+})
 
 describe("enterprise state persistence", () => {
   test("round-trips through localStorage", () => {
